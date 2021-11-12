@@ -12,12 +12,15 @@ const TFL_BASE_URL = 'https://api.tfl.gov.uk';
 
 export default class ConsoleRunner {
 
-    promptForPostcode(callback) {
-        readline.question('\nEnter your postcode: ', function(postcode) {
-            readline.close();
-            callback(postcode);
+    getPromptPromise() {
+        return new Promise(function(resolve, reject) {
+            readline.question('\nEnter your postcode: ', function(postcode) {
+                readline.close();
+                resolve(postcode);
+            });
         });
-    }
+    };
+
 
     displayStopPoints(stopPoints) {
         stopPoints.forEach(point => {
@@ -44,11 +47,30 @@ export default class ConsoleRunner {
             }
         });
     }
+    getGetRequestPromise(baseUrl, endpoint, parameters) {
+        const url = this.buildUrl(baseUrl, endpoint, parameters);
+        return new Promise(function(resolve, reject) {
+            request.get(url, (err, response, body) => {
+                if (err) {
+                    console.log(err);
+                    reject(err);
+                } else if (response.statusCode !== 200) {
+                    console.log(response.statusCode);
+                    reject(new Error(`Error: ${response.statusCode}`));
+                } else {
+                    resolve(body)
+                }
+            });
+        })
+    }
 
-    getLocationForPostCode(postcode, callback) {
-        this.makeGetRequest(POSTCODES_BASE_URL, `postcodes/${postcode}`, [], function(responseBody) {
+    getLocationForPostCode(postcode) {
+        this.getGetRequestPromise(POSTCODES_BASE_URL, `postcodes/${postcode}`, []).then(function(responseBody) {
             const jsonBody = JSON.parse(responseBody);
-            callback({ latitude: jsonBody.result.latitude, longitude: jsonBody.result.longitude });
+            console.log(jsonBody);
+            return { latitude: jsonBody.result.latitude, longitude: jsonBody.result.longitude };
+        }).catch(function(error) {
+            console.log(error)
         });
     }
 
@@ -75,13 +97,14 @@ export default class ConsoleRunner {
 
     run() {
         const that = this;
-        that.promptForPostcode(function(postcode) {
+        that.getPromptPromise().then(function setPostcode(postcode){
             postcode = postcode.replace(/\s/g, '');
-            that.getLocationForPostCode(postcode, function(location) {
+            console.log(postcode);
+            return that.getLocationForPostCode(postcode);
+        }).then(function(location) {
                 that.getNearestStopPoints(location.latitude, location.longitude, 5, function(stopPoints) {
                     that.displayStopPoints(stopPoints);
                 });
             });
-        });
     }
 }
